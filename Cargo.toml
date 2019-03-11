@@ -1,0 +1,12 @@
+[package]
+name = "netview"
+version = "0.1.0"
+authors = ["wen.ma <wen.ma@qunar.com>"]
+edition = "2018"
+
+[dependencies]
+libc = "0.2"
+rtnetlink = "0.1.1"
+futures = "0.1.17"
+tokio-core = "0.1"
+prettytable-rs = "^0.8"
