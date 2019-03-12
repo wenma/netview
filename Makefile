@@ -4,8 +4,8 @@ all: build
 
 .PHONY: debug
 debug:
-	sudo cargo run 
+	@sudo cargo run 
 
 .PHONY: build
 build:
-	cargo build --release
+	@cargo build --release

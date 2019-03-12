@@ -14,7 +14,6 @@ pub enum NsError {
     Nul(NulError),
 }
 
-
 impl From<NulError> for NsError {
      fn from(err: NulError) -> Self {
           NsError::Nul(err)
@@ -30,7 +29,6 @@ pub struct Namespaced {
     fd: i32,
     src_pid: u32,
 }
-
 
 impl WithNetns for Namespaced {
     fn with_netns(&self) {

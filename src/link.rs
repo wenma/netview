@@ -1,9 +1,13 @@
 
+use std::collections::HashMap;
 
 use futures::{Stream, Future};
 use rtnetlink::new_connection;
 use tokio_core::reactor::Core;
 use rtnetlink::packet::{LinkInfo, LinkInfoKind, LinkNla};
+
+use super::containers::Container;
+use super::containers::containers;
 
 #[derive(Debug, Clone)]
 pub struct Links {
@@ -16,12 +20,20 @@ impl Links {
         Links::default()
     }
 
+    fn ns_name(&mut self, name: String) {
+        self.ns_name = name;
+    }
+
     pub fn get_ns_name(&self) -> String {
         self.ns_name.clone()
     }
 
     pub fn get_links(&self) -> Vec<LinkDevice> {
         self.links.clone()
+    }
+
+    fn get_links_mut(&mut self) -> &mut Vec<LinkDevice> {
+        &mut self.links
     }
 }
 
@@ -39,7 +51,8 @@ pub struct LinkDevice {
     pub name: String,
     pub if_index: u32,
     pub link_type: Option<LinkInfoKind>,
-    pub veth_peer: Option<u32>
+    pub veth_peer: Option<u32>,
+    pub container: Option<Container>,
 }
 
 impl Default for LinkDevice {
@@ -49,11 +62,10 @@ impl Default for LinkDevice {
             if_index: 0,
             link_type: None,
             veth_peer: None,
+            container: None
         }
-
     }
 }
-
 
 pub trait KindToString {
     fn to_string(&self) -> String;
@@ -131,22 +143,31 @@ impl LinkDevice {
             None => String::new()
         }
     }
+
+    fn container(&mut self, c: Container) {
+        self.container = Some(c);
+    }
+
+    pub fn get_container(&self) -> String {
+        match self.container.clone() {
+            Some(c) => c.to_string(),
+            None => String::new(),
+        }
+    }
 }
 
+pub fn links<'a>(ns_name: &'a str) -> Links {
 
-pub fn links(ns_name: &str) -> Links {
+    let mut links = Links::new();
+    links.ns_name(String::from(ns_name));
+
     let (connection, handle) = new_connection().unwrap();
     let mut core = Core::new().unwrap();
     core.handle().spawn(connection.map_err(|_| ()));
 
-    let mut links = Links::new();
-    links.ns_name = String::from(ns_name);
-
     let request = handle.link().get().execute().for_each(|link| {
-
         let mut ld = LinkDevice::new();
         ld.if_index(link.header().index());
-
         for nla in link.nlas() {
             if let LinkNla::IfName(ref name) = nla {
                 ld.name(name.clone());
@@ -158,7 +179,6 @@ pub fn links(ns_name: &str) -> Links {
                         ld.link_type(kind.clone());
                     }
                 }
-
             }
 
             if let LinkNla::Link(peer_id) = nla {
@@ -166,11 +186,54 @@ pub fn links(ns_name: &str) -> Links {
             }
         }
 
-        links.links.push(ld);
+        links.get_links_mut().push(ld);
         Ok(())
 
     }); 
 
     core.run(request).unwrap();
     links
+}
+
+pub fn with_containers<'a>(links: &'a mut Vec<Links>) {
+    let cs: Vec<Container> = containers();
+    let mut if_index_map: HashMap<String, &mut LinkDevice> = HashMap::new();
+    let mut container_map: HashMap<String, Option<Container>> = HashMap::new();
+
+    for link in links {
+        
+         let ns_name = link.get_ns_name();
+         for device in link.get_links_mut() {
+            
+            let if_index = device.get_if_index();
+            if_index_map.insert(if_index.clone(), device);
+
+            let mut container: Option<Container> = None;
+            for c in &cs {
+                if c.get_config().get_sandbox_key().ends_with(&ns_name) {
+                    container = Some(c.clone());
+                }
+            }
+
+            if if_index != "1" {
+                container_map.insert(if_index, container);
+            }
+        }
+    }
+ 
+    for (if_index, link_device) in if_index_map {
+        let peer_index = link_device.get_veth_peer();
+
+        let _ = [container_map.get(&if_index), 
+                 container_map.get(&peer_index)]
+                .iter()
+                .map(|o|{
+
+            if let Some(container_ref) = o {
+                if let Some(c) = container_ref {
+                    link_device.container((*c).clone());
+                }
+            }
+         }).collect::<()>();
+    }
 }
