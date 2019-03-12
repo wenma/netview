@@ -210,7 +210,8 @@ pub fn with_containers<'a>(links: &'a mut Vec<Links>) {
 
             let mut container: Option<Container> = None;
             for c in &cs {
-                if c.get_config().get_sandbox_key().ends_with(&ns_name) {
+                if c.get_config().get_sandbox_key().ends_with(&ns_name) && 
+                    ns_name != "default" {
                     container = Some(c.clone());
                 }
             }
