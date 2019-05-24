@@ -120,17 +120,10 @@ fn walk_netns_names(root_path: &str) -> std::io::Result<Vec<String>> {
 
 pub fn ns_names() -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
-
-    let sys_ns_names = walk_netns_names(IPROUTE_NETNS_ROOT);
-    let docker_ns_names =  walk_netns_names(DOCKER_NETNS_ROOT); 
-
-    if let Ok(mut name) = sys_ns_names {
-        names.append(&mut name);
+    for root in &[IPROUTE_NETNS_ROOT, DOCKER_NETNS_ROOT] {
+        if let Ok(mut name) = walk_netns_names(root) {
+            names.append(&mut name);
+        }
     }
-    
-    if let Ok(mut name) = docker_ns_names {
-        names.append(&mut name);
-    }
-
     names
 }
