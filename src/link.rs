@@ -201,40 +201,35 @@ pub fn with_containers<'a>(links: &'a mut Vec<Links>) {
     let mut container_map: HashMap<String, Option<Container>> = HashMap::new();
 
     for link in links {
-        
          let ns_name = link.get_ns_name();
-         for device in link.get_links_mut() {
-            
-            let if_index = device.get_if_index();
-            if_index_map.insert(if_index.clone(), device);
 
-            let mut container: Option<Container> = None;
+         for device in link.get_links_mut() {        
+            let if_index = device.get_if_index();
+            let peer_index = device.get_veth_peer();
+
+            let if_index_name = format!("{} ({})", &if_index, &ns_name);
+            if_index_map.insert(if_index_name.clone(), device);
+
             for c in &cs {
                 if c.get_config().get_sandbox_key().ends_with(&ns_name) && 
                     ns_name != "default" {
-                    container = Some(c.clone());
-                }
-            }
+                    if if_index != "1" {
+                        container_map.insert(if_index_name.clone(), Some(c.clone()));
 
-            if if_index != "1" {
-                container_map.insert(if_index, container);
+                        let peer_index_name = format!("{} (default)", &peer_index);
+                        container_map.insert(peer_index_name.clone(), Some(c.clone()));
+                    }
+                    break;
+                }
             }
         }
     }
- 
+
     for (if_index, link_device) in if_index_map {
-        let peer_index = link_device.get_veth_peer();
-
-        let _ = [container_map.get(&if_index), 
-                 container_map.get(&peer_index)]
-                .iter()
-                .map(|o|{
-
-            if let Some(container_ref) = o {
-                if let Some(c) = container_ref {
-                    link_device.container((*c).clone());
-                }
+        if let Some(c) = container_map.get(&if_index) {
+            if let Some(container_ref) = c {
+                link_device.container((*container_ref).clone());
             }
-         }).collect::<()>();
+        }
     }
 }
